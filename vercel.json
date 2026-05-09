@@ -6,10 +6,13 @@
       "memory": 1024
     }
   },
-  "routes": [
+  "builds": [
     {
-      "src": "/api/donate",
-      "dest": "/api/donate.js"
+      "src": "api/donate.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["robux.png", "lib/**"]
+      }
     }
   ]
 }
