@@ -5,5 +5,16 @@
       "maxDuration": 30,
       "memory": 1024
     }
-  }
+  },
+  "builds": [
+    {
+      "src": "api/donate.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "robux.png"
+        ]
+      }
+    }
+  ]
 }
