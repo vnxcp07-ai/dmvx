@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/donate.js": {
-      "maxDuration": 15,
+      "maxDuration": 30,
       "memory": 1024
     }
   }
