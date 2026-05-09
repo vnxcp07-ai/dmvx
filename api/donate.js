@@ -4,10 +4,6 @@ const FormData = require('form-data');
 
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 
-// ==============================
-// Helpers
-// ==============================
-
 function formatNumber(n) {
     return parseInt(n).toLocaleString('en-US');
 }
@@ -30,53 +26,20 @@ async function fetchBuffer(url) {
     }
 }
 
-async function fetchRobloxAvatar(userId) {
-    try {
-        const json = await axios.get(
-            `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`,
-            { timeout: 5000 }
-        );
-        const url = json.data?.data?.[0]?.imageUrl;
-        if (!url) return null;
-        return await fetchBuffer(url);
-    } catch (e) {
-        console.warn('Avatar fetch failed:', userId, e.message);
-        return null;
-    }
-}
-
-// ==============================
-// Font
-// ==============================
-
 let fontName = 'sans-serif';
 let fontReady = false;
 
 async function ensureFont() {
     if (fontReady) return;
-    const urls = [
-        'https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf',
-        'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf',
-    ];
-    for (const url of urls) {
-        const buf = await fetchBuffer(url);
-        if (buf) {
-            try {
-                GlobalFonts.register(buf, 'DonationFont');
-                fontName = 'DonationFont';
-                fontReady = true;
-                console.log('Font OK:', url);
-                return;
-            } catch (e) {
-                console.warn('Font register failed:', e.message);
-            }
-        }
+    console.log('Downloading font...')
+    const buf = await fetchBuffer('https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf');
+    if (buf) {
+        GlobalFonts.register(buf, 'Montserrat');
+        fontName = 'Montserrat';
+        fontReady = true;
+        console.log('✅ Font loaded');
     }
 }
-
-// ==============================
-// Robux Icon
-// ==============================
 
 const ROBUX_URL = 'https://raw.githubusercontent.com/vnxcp07-ai/donation-proxy/main/edfae9388da4cd8496b885a8a2df613372500d9c-removebg-preview.png';
 let robuxIconCache = null;
@@ -85,12 +48,8 @@ async function getRobuxIcon() {
     if (robuxIconCache) return robuxIconCache;
     const buf = await fetchBuffer(ROBUX_URL);
     if (buf) {
-        try {
-            robuxIconCache = await loadImage(buf);
-            console.log('Robux icon loaded OK');
-        } catch (e) {
-            console.warn('Robux icon load failed:', e.message);
-        }
+        robuxIconCache = await loadImage(buf);
+        console.log('✅ Robux icon loaded');
     }
     return robuxIconCache;
 }
@@ -107,48 +66,32 @@ function tintIcon(img, size, hexColor) {
 
 function drawRobuxWithStroke(ctx, img, cx, cy, iconSize, color, strokeWidth) {
     const strokeSize = iconSize + strokeWidth * 2;
-
     const blackOff = createCanvas(strokeSize, strokeSize);
     const blackCtx = blackOff.getContext('2d');
     blackCtx.drawImage(img, 0, 0, strokeSize, strokeSize);
     blackCtx.globalCompositeOperation = 'source-in';
-    blackCtx.fillStyle = 'rgba(0,0,0,0.9)';
+    blackCtx.fillStyle = 'rgba(0,0,0,0.95)';
     blackCtx.fillRect(0, 0, strokeSize, strokeSize);
 
     const offsets = [
-        [-strokeWidth, -strokeWidth],
-        [0,            -strokeWidth],
-        [strokeWidth,  -strokeWidth],
-        [-strokeWidth,  0],
-        [strokeWidth,   0],
-        [-strokeWidth,  strokeWidth],
-        [0,             strokeWidth],
-        [strokeWidth,   strokeWidth],
+        [-strokeWidth, -strokeWidth], [0, -strokeWidth], [strokeWidth, -strokeWidth],
+        [-strokeWidth, 0],                              [strokeWidth, 0],
+        [-strokeWidth, strokeWidth],  [0, strokeWidth], [strokeWidth, strokeWidth],
     ];
 
     for (const [ox, oy] of offsets) {
-        ctx.drawImage(
-            blackOff,
-            cx - iconSize / 2 + ox - strokeWidth,
-            cy - iconSize / 2 + oy - strokeWidth,
-            strokeSize,
-            strokeSize
-        );
+        ctx.drawImage(blackOff, cx - iconSize/2 + ox, cy - iconSize/2 + oy, strokeSize, strokeSize);
     }
 
     const tinted = tintIcon(img, iconSize, color);
     ctx.drawImage(tinted, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
 }
 
-// ==============================
-// Draw text with black stroke
-// ==============================
-
 function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
     ctx.save();
     ctx.lineJoin = 'round';
     ctx.miterLimit = 2;
-    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.95)';
     ctx.lineWidth = strokeWidth;
     ctx.strokeText(text, x, y);
     ctx.fillStyle = fillColor;
@@ -156,16 +99,14 @@ function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
     ctx.restore();
 }
 
-// ==============================
-// Draw circular avatar
-// ==============================
-
 function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.save();
+    ctx.shadowColor = borderColor;
+    ctx.shadowBlur = 18;
     ctx.beginPath();
-    ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, radius + 5, 0, Math.PI * 2);
     ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5;
     ctx.stroke();
     ctx.restore();
 
@@ -178,70 +119,42 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.restore();
 }
 
-// ==============================
-// Main Handler
-// ==============================
-
 module.exports = async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
-
-    console.log('Received donation request:', JSON.stringify(req.body));
-
-    if (!WEBHOOK) {
-        console.error('DISCORD_WEBHOOK_URL not set');
-        return res.status(500).json({ error: 'Webhook not configured' });
-    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const {
-            donatorName,
-            raisedName,
-            donatorId,
-            raiserId,
-            amount
-        } = req.body;
+        const { donatorName, receiverName, donatorAvatar, receiverAvatar, amount } = req.body;
 
-        if (!donatorName || !raisedName || !amount) {
-            return res.status(400).json({ error: 'Missing fields' });
-        }
+        // Load everything first before drawing
+        await Promise.all([ ensureFont(), getRobuxIcon() ]);
 
-        await Promise.all([ensureFont(), getRobuxIcon()]);
+        const numAmount = parseInt(amount);
 
-        const numAmount = parseInt(
-            typeof amount === 'string' ? amount.replace(/,/g, '') : amount
-        );
-
-        // ── Theme color ──
-        let themeHex = '#00FF47';
-        let emoji    = '<:robux:1451215082640900146>';
-        let tier     = 'Nuke';
-
+        // ✅ EXACT TIERS MATCHING YOUR GAME
+        let themeHex, emoji;
         if (numAmount >= 10000000) {
-            themeHex = '#FF0037';
+            themeHex = '#ff2200';
             emoji    = '<:starfall:1490655938506395829>';
-            tier     = 'Starfall';
         } else if (numAmount >= 1000000) {
-            themeHex = '#FF0062';
+            themeHex = '#ff0099';
             emoji    = '<:smitebro:1490655992025841804>';
-            tier     = 'Smite';
         } else if (numAmount >= 100000) {
-            themeHex = '#ff00bf';
+            themeHex = '#cc66ff';
             emoji    = '<:nukeig:1490656026603683940>';
-            tier     = 'Nuke';
         }
 
-        const r = parseInt(themeHex.slice(1, 3), 16);
-        const g = parseInt(themeHex.slice(3, 5), 16);
-        const b = parseInt(themeHex.slice(5, 7), 16);
+        const r = parseInt(themeHex.slice(1,3),16);
+        const g = parseInt(themeHex.slice(3,5),16);
+        const b = parseInt(themeHex.slice(5,7),16);
 
-        // ── Canvas ──
-        const W = 620, H = 210;
+        const W = 700, H = 220;
         const canvas = createCanvas(W, H);
         const ctx = canvas.getContext('2d');
 
-        // Gradient from bottom up
+        // Full transparent base
+        ctx.clearRect(0,0,W,H);
+
+        // Tier colored gradient background glow
         const glow = ctx.createLinearGradient(0, H, 0, 0);
         glow.addColorStop(0,   `rgba(${r},${g},${b},0.35)`);
         glow.addColorStop(0.5, `rgba(${r},${g},${b},0.10)`);
@@ -249,110 +162,78 @@ module.exports = async function handler(req, res) {
         ctx.fillStyle = glow;
         ctx.fillRect(0, 0, W, H);
 
-        // ── Load avatars ──
-        const [dBuf, rBuf] = await Promise.all([
-            fetchRobloxAvatar(donatorId),
-            fetchRobloxAvatar(raiserId)
-        ]);
+        // Left accent bar
+        ctx.fillStyle = themeHex;
+        ctx.fillRect(0,0,8,H);
 
-        if (!dBuf || !rBuf) {
-            console.warn('Avatar fetch failed, using placeholder');
-        }
+        // Load avatars
+        const [dBuf, rBuf] = await Promise.all([ fetchBuffer(donatorAvatar), fetchBuffer(receiverAvatar) ]);
+        const [dImg, rImg] = await Promise.all([ loadImage(dBuf), loadImage(rBuf) ]);
 
-        const [dImg, rImg] = await Promise.all([
-            dBuf ? loadImage(dBuf) : null,
-            rBuf ? loadImage(rBuf) : null
-        ]);
-
-        // ── Layout ──
         const avatarRadius = 55;
         const avatarCY     = H / 2 - 12;
-        const leftCX       = 80;
-        const rightCX      = W - 80;
+        const leftCX       = 105;
+        const rightCX      = W - 105;
         const centerX      = W / 2;
 
-        if (dImg) drawAvatar(ctx, dImg, leftCX,  avatarCY, avatarRadius, themeHex);
-        if (rImg) drawAvatar(ctx, rImg, rightCX, avatarCY, avatarRadius, themeHex);
+        drawAvatar(ctx, dImg, leftCX,  avatarCY, avatarRadius, themeHex);
+        drawAvatar(ctx, rImg, rightCX, avatarCY, avatarRadius, themeHex);
 
-        // ── Center: Robux Icon + Amount on same row ──
-        const iconSize = 38;
+        const iconSize = 40;
         const amtText  = formatNumber(numAmount);
         const gap      = 12;
 
-        ctx.font         = `bold 44px ${fontName}`;
+        ctx.font = `bold 44px ${fontName}`;
         ctx.textBaseline = 'middle';
-        const amtWidth   = ctx.measureText(amtText).width;
+        const amtWidth = ctx.measureText(amtText).width;
 
         const groupW    = iconSize + gap + amtWidth;
         const groupLeft = centerX - groupW / 2;
         const rowY      = H / 2 - 18;
 
-        // Draw Robux icon WITH black stroke outline
-        if (robuxIconCache) {
-            drawRobuxWithStroke(
-                ctx,
-                robuxIconCache,
-                groupLeft + iconSize / 2,
-                rowY,
-                iconSize,
-                themeHex,
-                2
-            );
-        }
+        drawRobuxWithStroke(ctx, robuxIconCache, groupLeft + iconSize/2, rowY, iconSize, themeHex, 2);
 
-        // Amount text WITH black stroke
         ctx.textAlign = 'left';
         drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, rowY, themeHex, 5);
 
-        // "donated to" WITH black stroke
-        ctx.font         = `bold 20px ${fontName}`;
-        ctx.textAlign    = 'center';
-        ctx.textBaseline = 'alphabetic';
-        drawStrokedText(ctx, 'donated to', centerX, H / 2 + 30, '#FFFFFF', 4);
-
-        // Usernames WITH black stroke
-        ctx.font      = `bold 13px ${fontName}`;
+        ctx.font = `bold 22px ${fontName}`;
         ctx.textAlign = 'center';
+        drawStrokedText(ctx, 'donated to', centerX, H / 2 + 24, '#FFFFFF', 4);
 
+        ctx.font = `bold 15px ${fontName}`;
         const trim = (s, max = 14) => s.length > max ? s.slice(0, max) + '..' : s;
+        drawStrokedText(ctx, '@' + trim(donatorName),  leftCX,  avatarCY + avatarRadius + 26, '#FFFFFF', 4);
+        drawStrokedText(ctx, '@' + trim(receiverName), rightCX, avatarCY + avatarRadius + 26, '#FFFFFF', 4);
 
-        drawStrokedText(ctx, '@' + trim(donatorName),  leftCX,  avatarCY + avatarRadius + 22, '#FFFFFF', 4);
-        drawStrokedText(ctx, '@' + trim(raisedName), rightCX, avatarCY + avatarRadius + 22, '#FFFFFF', 4);
-
-        // ── Time ──
+        // Timestamp
         const now = new Date();
         const hh  = now.getHours();
         const mm  = now.getMinutes().toString().padStart(2, '0');
         const ap  = hh >= 12 ? 'PM' : 'AM';
         const dh  = hh % 12 || 12;
 
-        // ── Send to Discord ──
         const imgBuf = canvas.toBuffer('image/png');
         const form   = new FormData();
 
-        const payload = {
-            content: `${emoji} \`@${donatorName}\` donated <:robux:1451215082640900146> **${formatNumber(numAmount)} Robux** to \`@${raisedName}\``,
+        form.append('payload_json', JSON.stringify({
+            content: `${emoji} **@${donatorName} just dropped a <:robux:1451215082640900146> ${formatNumber(numAmount)} to @${receiverName}!**`,
             embeds: [{
                 color: hexToDec(themeHex),
                 image: { url: 'attachment://donation.png' },
-                footer: { text: `DONATE MODDED VX • Vxid Utilities • Today at ${dh}:${mm} ${ap}` }
+                footer: { text: `DONATE MODDED VX • Vxid Utilities • Today at ${dh}:${mm} ${ap}` },
+                timestamp: new Date().toISOString()
             }]
-        };
+        }));
 
-        form.append('payload_json', JSON.stringify(payload));
-        form.append('files[0]', imgBuf, {
-            filename:    'donation.png',
-            contentType: 'image/png'
-        });
+        form.append('files[0]', imgBuf, { filename: 'donation.png' });
 
-        console.log('Sending to Discord webhook...');
         await axios.post(WEBHOOK, form, { headers: form.getHeaders() });
-        console.log('Discord webhook sent successfully');
+        console.log('✅ Donation sent!', numAmount);
 
-        return res.status(200).json({ success: true, tier });
+        return res.json({ success: true });
 
     } catch (err) {
-        console.error('Error:', err.message);
+        console.error('💥 Error:', err);
         return res.status(500).json({ error: err.message });
     }
 };
