@@ -1,12 +1,10 @@
 {
-  "name": "donation-webhook",
+  "name": "donation-proxy",
   "version": "1.0.0",
-  "engines": {
-    "node": ">=18.x"
-  },
+  "engines": { "node": "20.x" },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.44",
-    "axios": "^1.6.0",
+    "@napi-rs/canvas": "0.1.53",
+    "axios": "^1.7.9",
     "form-data": "^4.0.0"
   }
 }
