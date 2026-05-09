@@ -23,17 +23,61 @@ function hexToDec(hex) {
 }
 
 async function fetchBuffer(url) {
-    try {
-        const res = await axios.get(url, {
-            responseType: 'arraybuffer',
-            timeout: 8000,
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        return Buffer.from(res.data);
-    } catch (e) {
-        console.warn('fetchBuffer failed:', url, e.message);
+  try {
+    if (!url) return null;
+
+    // Case 1: Roblox thumbnail scheme (rbxthumb://...)
+    if (typeof url === "string" && url.startsWith("rbxthumb://")) {
+      // Example:
+      // rbxthumb://type=HeadShot&id=7313071879&w=150&h=150
+      const m = url.match(/^rbxthumb:\/\/type=([^&]+)&id=(\d+)&w=(\d+)&h=(\d+)/i);
+      if (!m) {
+        console.warn("fetchBuffer: could not parse rbxthumb url:", url);
         return null;
+      }
+
+      const type = decodeURIComponent(m[1]);
+      const userId = m[2];
+      const w = m[3];
+      const h = m[4];
+
+      // Map thumbnail type -> Roblox thumbnails endpoint
+      const typeLower = type.toLowerCase();
+      const endpoint =
+        typeLower.includes("avatar") ? "avatar-headshot" : "headshot";
+
+      const thumbRes = await axios.get(
+        `https://thumbnails.roblox.com/v1/users/${endpoint}?userIds=${userId}&size=${w}x${h}&format=Png&isCircular=false`,
+        {
+          timeout: 7000,
+          headers: { "User-Agent": "Mozilla/5.0" },
+        }
+      );
+
+      const imageUrl = thumbRes.data?.data?.[0]?.imageUrl;
+      if (!imageUrl) return null;
+
+      const imgRes = await axios.get(imageUrl, {
+        responseType: "arraybuffer",
+        timeout: 7000,
+        headers: { "User-Agent": "Mozilla/5.0" },
+      });
+
+      return Buffer.from(imgRes.data);
     }
+
+    // Case 2: Normal http/https URL
+    const res = await axios.get(url, {
+      responseType: "arraybuffer",
+      timeout: 10000,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+
+    return Buffer.from(res.data);
+  } catch (e) {
+    console.warn("fetchBuffer failed:", url, e.message);
+    return null;
+  }
 }
 
 // ==============================
