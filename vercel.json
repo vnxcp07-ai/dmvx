@@ -2,17 +2,8 @@
   "version": 2,
   "functions": {
     "api/donate.js": {
-      "maxDuration": 30,
+      "maxDuration": 15,
       "memory": 1024
     }
-  },
-  "builds": [
-    {
-      "src": "api/donate.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["robux.png", "lib/**"]
-      }
-    }
-  ]
+  }
 }
