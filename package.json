@@ -1,13 +1,11 @@
 {
   "name": "donation-webhook",
   "version": "1.0.0",
-  "description": "Roblox donation image proxy for Discord webhooks",
-  "main": "index.js",
   "engines": {
     "node": ">=18.x"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.44",
+    "canvas": "^2.11.2",
     "axios": "^1.6.0",
     "form-data": "^4.0.0"
   }
