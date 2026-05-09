@@ -182,6 +182,8 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
 // Main Handler
 // ==============================
 
+// In api/donate.js, update the handler function to this:
+
 module.exports = async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -197,13 +199,13 @@ module.exports = async function handler(req, res) {
     try {
         const {
             donatorName,
-            raisedName,
-            donatorId,
-            raiserId,
+            receiverName,
+            donatorAvatar,
+            receiverAvatar,
             amount
         } = req.body;
 
-        if (!donatorName || !raisedName || !amount) {
+        if (!donatorName || !receiverName || !donatorAvatar || !receiverAvatar || !amount) {
             return res.status(400).json({ error: 'Missing fields' });
         }
 
@@ -251,13 +253,9 @@ module.exports = async function handler(req, res) {
 
         // ── Load avatars ──
         const [dBuf, rBuf] = await Promise.all([
-            fetchRobloxAvatar(donatorId),
-            fetchRobloxAvatar(raiserId)
+            fetchBuffer(donatorAvatar),
+            fetchBuffer(receiverAvatar)
         ]);
-
-        if (!dBuf || !rBuf) {
-            console.warn('Avatar fetch failed, using placeholder');
-        }
 
         const [dImg, rImg] = await Promise.all([
             dBuf ? loadImage(dBuf) : null,
@@ -274,7 +272,7 @@ module.exports = async function handler(req, res) {
         if (dImg) drawAvatar(ctx, dImg, leftCX,  avatarCY, avatarRadius, themeHex);
         if (rImg) drawAvatar(ctx, rImg, rightCX, avatarCY, avatarRadius, themeHex);
 
-        // ── Center: Robux Icon + Amount on same row ──
+        // ── Center: Robux Icon + Amount ──
         const iconSize = 38;
         const amtText  = formatNumber(numAmount);
         const gap      = 12;
@@ -287,7 +285,6 @@ module.exports = async function handler(req, res) {
         const groupLeft = centerX - groupW / 2;
         const rowY      = H / 2 - 18;
 
-        // Draw Robux icon WITH black stroke outline
         if (robuxIconCache) {
             drawRobuxWithStroke(
                 ctx,
@@ -300,24 +297,21 @@ module.exports = async function handler(req, res) {
             );
         }
 
-        // Amount text WITH black stroke
         ctx.textAlign = 'left';
         drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, rowY, themeHex, 5);
 
-        // "donated to" WITH black stroke
         ctx.font         = `bold 20px ${fontName}`;
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'alphabetic';
         drawStrokedText(ctx, 'donated to', centerX, H / 2 + 30, '#FFFFFF', 4);
 
-        // Usernames WITH black stroke
         ctx.font      = `bold 13px ${fontName}`;
         ctx.textAlign = 'center';
 
         const trim = (s, max = 14) => s.length > max ? s.slice(0, max) + '..' : s;
 
         drawStrokedText(ctx, '@' + trim(donatorName),  leftCX,  avatarCY + avatarRadius + 22, '#FFFFFF', 4);
-        drawStrokedText(ctx, '@' + trim(raisedName), rightCX, avatarCY + avatarRadius + 22, '#FFFFFF', 4);
+        drawStrokedText(ctx, '@' + trim(receiverName), rightCX, avatarCY + avatarRadius + 22, '#FFFFFF', 4);
 
         // ── Time ──
         const now = new Date();
@@ -331,7 +325,7 @@ module.exports = async function handler(req, res) {
         const form   = new FormData();
 
         const payload = {
-            content: `${emoji} \`@${donatorName}\` donated <:robux:1451215082640900146> **${formatNumber(numAmount)} Robux** to \`@${raisedName}\``,
+            content: `${emoji} \`@${donatorName}\` donated <:robux:1451215082640900146> **${formatNumber(numAmount)} Robux** to \`@${receiverName}\``,
             embeds: [{
                 color: hexToDec(themeHex),
                 image: { url: 'attachment://donation.png' },
