@@ -6,7 +6,7 @@ const fs = require('fs');
 
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 
-// ── Log every single startup so we know the function is running ──
+
 console.log('=== donate.js loaded ===');
 console.log('WEBHOOK set:', !!WEBHOOK);
 
@@ -26,10 +26,9 @@ async function fetchBuffer(url) {
   try {
     if (!url) return null;
 
-    // Case 1: Roblox thumbnail scheme (rbxthumb://...)
+
     if (typeof url === "string" && url.startsWith("rbxthumb://")) {
-      // Example:
-      // rbxthumb://type=HeadShot&id=7313071879&w=150&h=150
+
       const m = url.match(/^rbxthumb:\/\/type=([^&]+)&id=(\d+)&w=(\d+)&h=(\d+)/i);
       if (!m) {
         console.warn("fetchBuffer: could not parse rbxthumb url:", url);
