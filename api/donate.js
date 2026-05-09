@@ -4,6 +4,7 @@ const axios    = require("axios");
 
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 
+
 function getTierMeta(amount) {
   if (amount >= 10000000) return { emoji: "<:starfall:1490655938506395829>", tier: "Starfall", color: 0xff0000 };
   if (amount >= 1000000)  return { emoji: "<:smitebro:1490655992025841804>",  tier: "Smite",    color: 0xff66cc };
