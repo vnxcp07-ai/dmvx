@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
   // Send to discord
   const form = new FormData();
   form.append("payload_json", JSON.stringify({
-    content: `${meta.emoji} **${req.body.donatorName} just dropped a ${robux} ${formatted} ${meta.tier} to ${req.body.raisedName}!**\n${req.body.donatorName} donated ${robux} ${formatted} to ${req.body.raisedName}!`,
+    content: `${meta.emoji} **${req.body.donatorName} just dropped a ${robux} ${formatted} ${meta.tier} to ${req.body.raisedName}!**`,
     embeds: [{
       color: meta.color,
       image: { url: "attachment://card.png" },
