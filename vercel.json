@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "functions": {
+    "api/donate.js": {
+      "maxDuration": 30,
+      "memory": 1024
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/donate",
+      "dest": "/api/donate.js"
+    }
+  ]
+}
