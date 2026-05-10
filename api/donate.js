@@ -150,7 +150,7 @@ ctx.restore();
 async function fetchAvatarUrl(userId) {
 try {
 const res = await axios.get(
-https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png,
+`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png`,
 { timeout: 5000 }
 );
 return res.data.data[0].imageUrl;
