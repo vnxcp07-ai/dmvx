@@ -6,14 +6,8 @@ const fs = require('fs');
 
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 
-
 console.log('=== donate.js loaded ===');
 console.log('WEBHOOK set:', !!WEBHOOK);
-
-
-// ==============================
-// Helpers
-// ==============================
 
 function formatNumber(n) {
     return parseInt(n).toLocaleString('en-US');
@@ -24,106 +18,91 @@ function hexToDec(hex) {
 }
 
 async function fetchBuffer(url) {
-  try {
-    if (!url) return null;
-
-
-    if (typeof url === "string" && url.startsWith("rbxthumb://")) {
-
-      const m = url.match(/^rbxthumb:\/\/type=([^&]+)&id=(\d+)&w=(\d+)&h=(\d+)/i);
-      if (!m) {
-        console.warn("fetchBuffer: could not parse rbxthumb url:", url);
+    try {
+        const res = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 8000,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        return Buffer.from(res.data);
+    } catch (e) {
+        console.warn('fetchBuffer failed:', url, e.message);
         return null;
-      }
-
-      const type = decodeURIComponent(m[1]);
-      const userId = m[2];
-      const w = m[3];
-      const h = m[4];
-
-      // Map thumbnail type -> Roblox thumbnails endpoint
-      const typeLower = type.toLowerCase();
-      const endpoint =
-        typeLower.includes("avatar") ? "avatar-headshot" : "headshot";
-
-      const thumbRes = await axios.get(
-        `https://thumbnails.roblox.com/v1/users/${endpoint}?userIds=${userId}&size=${w}x${h}&format=Png&isCircular=false`,
-        {
-          timeout: 7000,
-          headers: { "User-Agent": "Mozilla/5.0" },
-        }
-      );
-
-      const imageUrl = thumbRes.data?.data?.[0]?.imageUrl;
-      if (!imageUrl) return null;
-
-      const imgRes = await axios.get(imageUrl, {
-        responseType: "arraybuffer",
-        timeout: 7000,
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-
-      return Buffer.from(imgRes.data);
     }
-
-    // Case 2: Normal http/https URL
-    const res = await axios.get(url, {
-      responseType: "arraybuffer",
-      timeout: 10000,
-      headers: { "User-Agent": "Mozilla/5.0" },
-    });
-
-    return Buffer.from(res.data);
-  } catch (e) {
-    console.warn("fetchBuffer failed:", url, e.message);
-    return null;
-  }
 }
 
-// ==============================
-// Font — download Montserrat Bold once per cold start
-// ==============================
+async function fetchRobloxAvatar(userId) {
+    try {
+        console.log('Fetching avatar for userId:', userId);
+        const json = await axios.get(
+            `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`,
+            {
+                timeout: 8000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            }
+        );
+        const url = json.data?.data?.[0]?.imageUrl;
+        if (!url) {
+            console.warn('No imageUrl returned for userId:', userId);
+            return null;
+        }
+        console.log('Got avatar URL:', url);
+        const res = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 8000,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        return Buffer.from(res.data);
+    } catch (e) {
+        console.warn('fetchRobloxAvatar failed:', userId, e.message);
+        return null;
+    }
+}
 
+// ── Font ──────────────────────────────────────────────────────────────────────
 let fontName = 'sans-serif';
 let fontReady = false;
 
 async function ensureFont() {
     if (fontReady) return;
-    console.log('Loading font...');
-    const buf = await fetchBuffer(
-        'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf'
-    );
-    if (buf) {
-        try {
+    try {
+        const fontPath = path.join(process.cwd(), 'Montserrat-Bold.ttf');
+        console.log('Loading font from disk:', fontPath);
+        console.log('Font exists:', fs.existsSync(fontPath));
+        const buf = fs.readFileSync(fontPath);
+        GlobalFonts.register(buf, 'Montserrat');
+        fontName = 'Montserrat';
+        fontReady = true;
+        console.log('✅ Font loaded from disk');
+    } catch (e) {
+        console.warn('Font from disk failed:', e.message, '— trying download...');
+        const buf = await fetchBuffer(
+            'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf'
+        );
+        if (buf) {
             GlobalFonts.register(buf, 'Montserrat');
             fontName = 'Montserrat';
             fontReady = true;
-            console.log('✅ Font loaded');
-        } catch (e) {
-            console.warn('Font register failed:', e.message);
+            console.log('✅ Font loaded from download');
+        } else {
+            console.warn('Font download also failed, using sans-serif');
         }
-    } else {
-        console.warn('Font download failed, using sans-serif fallback');
     }
 }
 
-// ==============================
-// Robux Icon — load from repo root
-// ==============================
-
+// ── Robux Icon ────────────────────────────────────────────────────────────────
 let robuxIconCache = null;
 
 async function getRobuxIcon() {
     if (robuxIconCache) return robuxIconCache;
     try {
         const robuxPath = path.join(process.cwd(), 'robux.png');
-        console.log('Loading robux icon from:', robuxPath);
-        console.log('File exists:', fs.existsSync(robuxPath));
+        console.log('Loading robux from disk:', robuxPath);
+        console.log('Robux exists:', fs.existsSync(robuxPath));
         robuxIconCache = await loadImage(robuxPath);
         console.log('✅ Robux icon loaded from disk');
     } catch (e) {
-        console.warn('Robux icon from disk failed:', e.message);
-        // fallback: download from github
+        console.warn('Robux from disk failed:', e.message);
         const buf = await fetchBuffer(
             'https://raw.githubusercontent.com/vnxcp07-ai/donation-proxy/main/robux.png'
         );
@@ -135,10 +114,7 @@ async function getRobuxIcon() {
     return robuxIconCache;
 }
 
-// ==============================
-// Drawing helpers
-// ==============================
-
+// ── Drawing helpers ───────────────────────────────────────────────────────────
 function tintIcon(img, size, hexColor) {
     const off = createCanvas(size, size);
     const ctx = off.getContext('2d');
@@ -187,7 +163,6 @@ function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
 }
 
 function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
-    // Glowing border
     ctx.save();
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 15;
@@ -198,7 +173,6 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.stroke();
     ctx.restore();
 
-    // Circular clip
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -208,10 +182,7 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.restore();
 }
 
-// ==============================
-// Main Handler
-// ==============================
-
+// ── Main Handler ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
     console.log('=== New request ===');
     console.log('Method:', req.method);
@@ -222,27 +193,26 @@ module.exports = async function handler(req, res) {
     }
 
     if (!WEBHOOK) {
-        console.error('❌ DISCORD_WEBHOOK_URL not set in env');
+        console.error('❌ DISCORD_WEBHOOK_URL not set');
         return res.status(500).json({ error: 'Webhook not configured' });
     }
 
     try {
-        const { donatorName, receiverName, donatorAvatar, receiverAvatar, amount } = req.body || {};
+        const { donatorName, receiverName, donatorId, receiverId, amount } = req.body || {};
 
-        console.log('Fields:', { donatorName, receiverName, donatorAvatar, receiverAvatar, amount });
+        console.log('Fields:', { donatorName, receiverName, donatorId, receiverId, amount });
 
-        if (!donatorName || !receiverName || !donatorAvatar || !receiverAvatar || amount == null) {
+        if (!donatorName || !receiverName || !donatorId || !receiverId || amount == null) {
             return res.status(400).json({ error: 'Missing fields', received: req.body });
         }
 
-        // Load font + robux icon in parallel
         await Promise.all([ensureFont(), getRobuxIcon()]);
 
         const numAmount = parseInt(
             typeof amount === 'string' ? amount.replace(/,/g, '') : amount
         );
 
-        console.log('Amount:', numAmount);
+        console.log('numAmount:', numAmount);
 
         // ── Tier ──
         let themeHex, emoji, tier;
@@ -263,10 +233,8 @@ module.exports = async function handler(req, res) {
         const canvas = createCanvas(W, H);
         const ctx = canvas.getContext('2d');
 
-        // transparent base
         ctx.clearRect(0, 0, W, H);
 
-        // gradient glow background
         const bgGrad = ctx.createLinearGradient(0, H, 0, 0);
         bgGrad.addColorStop(0,   `rgba(${r},${g},${b},0.40)`);
         bgGrad.addColorStop(0.5, `rgba(${r},${g},${b},0.12)`);
@@ -274,14 +242,13 @@ module.exports = async function handler(req, res) {
         ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, W, H);
 
-        // Left accent bar
         ctx.fillStyle = themeHex;
         ctx.fillRect(0, 0, 7, H);
 
-        // ── Avatars ──
+        // ── Fetch avatars using userId ──
         const [dBuf, rBuf] = await Promise.all([
-            fetchBuffer(donatorAvatar),
-            fetchBuffer(receiverAvatar)
+            fetchRobloxAvatar(donatorId),
+            fetchRobloxAvatar(receiverId)
         ]);
 
         const [dImg, rImg] = await Promise.all([
@@ -298,7 +265,7 @@ module.exports = async function handler(req, res) {
         if (dImg) drawAvatar(ctx, dImg, leftCX,  avatarCY, avatarRadius, themeHex);
         if (rImg) drawAvatar(ctx, rImg, rightCX, avatarCY, avatarRadius, themeHex);
 
-        // ── Robux icon + amount centered ──
+        // ── Robux icon + amount ──
         const iconSize = 40;
         const amtText  = formatNumber(numAmount);
         const gap      = 12;
@@ -317,26 +284,22 @@ module.exports = async function handler(req, res) {
         ctx.textAlign = 'left';
         drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, rowY, themeHex, 6);
 
-        // "donated to"
         ctx.font = `bold 21px ${fontName}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
         drawStrokedText(ctx, 'donated to', centerX, H / 2 + 30, '#FFFFFF', 4);
 
-        // Usernames
         ctx.font = `bold 14px ${fontName}`;
         const trim = (s, max = 14) => s.length > max ? s.slice(0, max) + '..' : s;
         drawStrokedText(ctx, '@' + trim(donatorName),  leftCX,  avatarCY + avatarRadius + 24, '#FFFFFF', 4);
         drawStrokedText(ctx, '@' + trim(receiverName), rightCX, avatarCY + avatarRadius + 24, '#FFFFFF', 4);
 
-        // ── Timestamp ──
         const now = new Date();
         const hh  = now.getHours();
         const mm  = now.getMinutes().toString().padStart(2, '0');
         const ap  = hh >= 12 ? 'PM' : 'AM';
         const dh  = hh % 12 || 12;
 
-        // ── Discord ──
         const imgBuf = canvas.toBuffer('image/png');
         console.log('Image buffer size:', imgBuf.length);
 
@@ -362,7 +325,7 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ success: true, tier });
 
     } catch (err) {
-        console.error('💥 Handler error:', err.message, err.stack);
+        console.error('💥 Error:', err.message, err.stack);
         return res.status(500).json({ error: err.message });
     }
 };
