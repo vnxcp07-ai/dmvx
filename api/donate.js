@@ -41,20 +41,18 @@ async function ensureFont() {
                 GlobalFonts.register(buf, 'DonationFont');
                 fontName  = 'DonationFont';
                 fontReady = true;
-                console.log('[Font] Loaded from:', url);
+                console.log('[Font] Loaded OK from:', url);
                 return;
             } catch (e) {
                 console.warn('[Font] Register failed:', e.message);
             }
         }
     }
-    console.warn('[Font] Using sans-serif fallback');
+    console.warn('[Font] All fonts failed, using sans-serif');
 }
 
 // ── Robux Icon ────────────────────────────────────────────────────────────────
-// Raw link to your robux.png in your repo
 const ROBUX_URL = 'https://raw.githubusercontent.com/vnxcp07-ai/dmvx/main/robux.png';
-
 let robuxIconCache = null;
 
 async function getRobuxIcon() {
@@ -108,12 +106,12 @@ function drawRobuxWithStroke(ctx, img, cx, cy, iconSize, color, strokeWidth) {
     ctx.drawImage(tinted, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
 }
 
-// ── Text ──────────────────────────────────────────────────────────────────────
+// ── Draw text: stroke first, fill on top ──────────────────────────────────────
 function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
     ctx.save();
     ctx.lineJoin    = 'round';
     ctx.miterLimit  = 2;
-    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
     ctx.lineWidth   = strokeWidth;
     ctx.strokeText(text, x, y);
     ctx.fillStyle   = fillColor;
@@ -121,9 +119,9 @@ function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
     ctx.restore();
 }
 
-// ── Avatar ────────────────────────────────────────────────────────────────────
+// ── Avatar: image clipped first, ring drawn on top ───────────────────────────
 function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
-    // 1. Clip and draw image first
+    // 1. clip and draw image
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -132,7 +130,7 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
     ctx.restore();
 
-    // 2. Ring drawn ON TOP of image
+    // 2. ring ON TOP
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
@@ -144,7 +142,7 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.restore();
 }
 
-// ── Fetch Roblox avatar URL from userId ───────────────────────────────────────
+// ── Fetch Roblox avatar URL ───────────────────────────────────────────────────
 async function fetchAvatarUrl(userId) {
     try {
         const res = await axios.get(
@@ -158,14 +156,11 @@ async function fetchAvatarUrl(userId) {
     }
 }
 
-// ── Tier ──────────────────────────────────────────────────────────────────────
+// ── Tier: only 3 levels ───────────────────────────────────────────────────────
 function getTier(amount) {
     if (amount >= 10000000) return { hex: '#ff0000', emoji: '<:starfall:1490655938506395829>' };
     if (amount >= 1000000)  return { hex: '#ff0099', emoji: '<:smitebro:1490655992025841804>' };
-    if (amount >= 100000)   return { hex: '#a100ff', emoji: '<:nukeig:1490656026603683940>' };
-    if (amount >= 10000)    return { hex: '#FF0037', emoji: '<:starfall:1490655938506395829>' };
-    if (amount >= 1000)     return { hex: '#FF0062', emoji: '<:smitebro:1490655992025841804>' };
-    return                         { hex: '#ff00bf', emoji: '<:nukeig:1490656026603683940>' };
+    return                         { hex: '#a100ff', emoji: '<:nukeig:1490656026603683940>' };
 }
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
@@ -175,13 +170,9 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-        const {
-            donatorName,
-            receiverName,
-            donatorId,
-            receiverId,
-            amount
-        } = req.body;
+        const { donatorName, receiverName, donatorId, receiverId, amount } = req.body;
+
+        console.log('[Request] body:', req.body);
 
         if (!donatorId || !receiverId || amount == null) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -196,12 +187,16 @@ module.exports = async function handler(req, res) {
             typeof amount === 'string' ? amount.replace(/,/g, '') : amount
         );
 
+        if (numAmount < 100000) {
+            return res.status(200).json({ skipped: true, reason: 'Below 100k threshold' });
+        }
+
         const { hex: themeHex, emoji } = getTier(numAmount);
         const r = parseInt(themeHex.slice(1, 3), 16);
         const g = parseInt(themeHex.slice(3, 5), 16);
         const b = parseInt(themeHex.slice(5, 7), 16);
 
-        // Load font + icon + avatar URLs all in parallel
+        // load font + icon + avatar urls in parallel
         const [, , donatorAvatarUrl, receiverAvatarUrl] = await Promise.all([
             ensureFont(),
             getRobuxIcon(),
@@ -209,9 +204,9 @@ module.exports = async function handler(req, res) {
             fetchAvatarUrl(receiverId),
         ]);
 
-        console.log('[Avatar URLs]', donatorAvatarUrl, receiverAvatarUrl);
+        console.log('[Font]', fontName, '| [Robux]', !!robuxIconCache);
+        console.log('[Avatars]', donatorAvatarUrl, receiverAvatarUrl);
 
-        // Fetch avatar buffers
         const [dBuf, rBuf] = await Promise.all([
             donatorAvatarUrl  ? fetchBuffer(donatorAvatarUrl)  : Promise.resolve(null),
             receiverAvatarUrl ? fetchBuffer(receiverAvatarUrl) : Promise.resolve(null),
@@ -231,7 +226,7 @@ module.exports = async function handler(req, res) {
         const canvas = createCanvas(W, H);
         const ctx    = canvas.getContext('2d');
 
-        // Transparent + bottom glow gradient
+        // transparent bg + bottom glow
         ctx.clearRect(0, 0, W, H);
         const glow = ctx.createLinearGradient(0, H, 0, 0);
         glow.addColorStop(0,   `rgba(${r},${g},${b},0.35)`);
@@ -250,19 +245,22 @@ module.exports = async function handler(req, res) {
         drawAvatar(ctx, dImg, leftCX,  avatarCY, avatarRadius, themeHex);
         drawAvatar(ctx, rImg, rightCX, avatarCY, avatarRadius, themeHex);
 
-        // ── Center: icon + amount ─────────────────────────────────────────────
+        // ── Amount row: icon + number ─────────────────────────────────────────
         const iconSize = 38;
         const amtText  = formatNumber(numAmount);
-        const gap      = 12;
+        const gap      = 10;
+        const rowY     = H / 2 - 18;
 
+        // MUST set font before measuring
         ctx.font         = `bold 44px ${fontName}`;
         ctx.textBaseline = 'middle';
-        const amtWidth   = ctx.measureText(amtText).width;
+        ctx.textAlign    = 'left';
 
+        const amtWidth  = ctx.measureText(amtText).width;
         const groupW    = iconSize + gap + amtWidth;
         const groupLeft = centerX - groupW / 2;
-        const rowY      = H / 2 - 18;
 
+        // Robux icon
         if (robuxIconCache) {
             drawRobuxWithStroke(
                 ctx, robuxIconCache,
@@ -271,23 +269,27 @@ module.exports = async function handler(req, res) {
             );
         }
 
-        ctx.textAlign = 'left';
-        drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, rowY, themeHex, 5);
+        // Amount number - font/align/baseline already set
+        drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, rowY, themeHex, 4);
 
         // "donated to"
         ctx.font         = `bold 20px ${fontName}`;
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'alphabetic';
-        drawStrokedText(ctx, 'donated to', centerX, H / 2 + 30, '#FFFFFF', 4);
+        drawStrokedText(ctx, 'donated to', centerX, H / 2 + 32, '#FFFFFF', 3);
 
-        // Usernames
-        ctx.font      = `bold 13px ${fontName}`;
-        ctx.textAlign = 'center';
-        const trim    = (s, max = 14) => s.length > max ? s.slice(0, max) + '..' : s;
-        const nameY   = avatarCY + avatarRadius + 22;
+        // ── Usernames ─────────────────────────────────────────────────────────
+        const trim  = (s, max = 14) => s.length > max ? s.slice(0, max) + '..' : s;
+        const nameY = avatarCY + avatarRadius + 20;
 
-        drawStrokedText(ctx, '@' + trim(donatorName  || 'Unknown'), leftCX,  nameY, '#FFFFFF', 4);
-        drawStrokedText(ctx, '@' + trim(receiverName || 'Unknown'), rightCX, nameY, '#FFFFFF', 4);
+        ctx.font         = `bold 14px ${fontName}`;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'alphabetic';
+
+        drawStrokedText(ctx, '@' + trim(donatorName  || 'Unknown'), leftCX,  nameY, '#FFFFFF', 3);
+        drawStrokedText(ctx, '@' + trim(receiverName || 'Unknown'), rightCX, nameY, '#FFFFFF', 3);
+
+        console.log('[Canvas] Done - donator:', donatorName, '| receiver:', receiverName, '| amount:', amtText);
 
         // ── Time ──────────────────────────────────────────────────────────────
         const now = new Date();
@@ -296,7 +298,7 @@ module.exports = async function handler(req, res) {
         const ap  = hh >= 12 ? 'PM' : 'AM';
         const dh  = hh % 12 || 12;
 
-        // ── Send to Discord ───────────────────────────────────────────────────
+        // ── Discord ───────────────────────────────────────────────────────────
         const imgBuf = canvas.toBuffer('image/png');
         const form   = new FormData();
 
