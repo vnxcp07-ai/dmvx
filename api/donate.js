@@ -4,11 +4,11 @@ const { generateDonationImage } = require('../lib/generateImage.js');
 
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-// --- FIX: Add tier logic here to get the color for the embed ---
+// FIXED: Tiers now include your Emojis
 const TIERS = {
-  starfall: { accent: '#ff0000' },
-  smite:    { accent: '#ff0099' },
-  nuke:     { accent: '#a100ff' }
+  starfall: { accent: '#ff0000', emoji: '<:starfall:1490655938506395829>' },
+  smite:    { accent: '#ff0099', emoji: '<:smitebro:1490655992025841804>' },
+  nuke:     { accent: '#a100ff', emoji: '<:nukeig:1490656026603683940>' }
 };
 
 function getTier(amount) {
@@ -20,7 +20,6 @@ function getTier(amount) {
 function hexToDec(hex) {
     return parseInt(hex.replace('#', ''), 16);
 }
-// --- END FIX ---
 
 module.exports = async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -38,24 +37,25 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'Missing required fields in request body.' });
         }
         
-        // --- FIX: Determine the tier color ---
         const tierName = getTier(amount);
-        const tierColor = TIERS[tierName].accent;
+        const tier = TIERS[tierName];
 
         const imageBuffer = await generateDonationImage(donatorName, receiverName, donatorId, receiverId, amount);
         
         const form = new FormData();
+        // FIXED: The 'content' string now includes the emojis again
         form.append('payload_json', JSON.stringify({
-            content: `**@${donatorName}** donated **${Number(amount).toLocaleString()}** Robux to **@${receiverName}**`,
+            content: `${tier.emoji} \`@${donatorName}\` donated <:robux:1451215082640900146> **${Number(amount).toLocaleString()} Robux** to \`@${receiverName}\``,
             embeds: [{
-                // --- FIX: Use the calculated tier color ---
-                color: hexToDec(tierColor), 
+                color: hexToDec(tier.accent), 
                 image: { url: 'attachment://donation.png' },
                 footer: { text: `Donated on • Vxid Utilities` }
             }]
         }));
         
-        form.append('files[0]', imageBuffer, {
+        // Vercel expects 'files[0]' for multiple files, but 'file' is often more reliable for a single file with form-data.
+        // Let's stick to the more common single-file key 'file'. If it fails, we use 'files[0]'
+        form.append('file', imageBuffer, {
             filename: 'donation.png',
             contentType: 'image/png',
         });
