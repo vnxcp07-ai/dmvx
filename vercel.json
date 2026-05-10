@@ -4,10 +4,7 @@
     "api/donate.js": {
       "maxDuration": 30,
       "memory": 1024,
-      "includeFiles": [
-        "robux.png",
-        "Poppins-Bold.ttf"
-      ]
+      "includeFiles": "{Poppins-Bold.ttf,robux.png}"
     }
   }
 }
