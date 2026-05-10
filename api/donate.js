@@ -158,9 +158,9 @@ async function fetchAvatarUrl(userId) {
 
 // ── Tier: only 3 levels ───────────────────────────────────────────────────────
 function getTier(amount) {
-    if (amount >= 10000000) return { hex: '##ff0033', emoji: '<:starfall:1490655938506395829>' };
-    if (amount >= 1000000)  return { hex: '##ff0080', emoji: '<:smitebro:1490655992025841804>' };
-    return                         { hex: '##ff00e1', emoji: '<:nukeig:1490656026603683940>' };
+    if (amount >= 10000000) return { hex: '#ff0033', emoji: '<:starfall:1490655938506395829>' };
+    if (amount >= 1000000)  return { hex: '#ff0080', emoji: '<:smitebro:1490655992025841804>' };
+    return                         { hex: '#ff00e1', emoji: '<:nukeig:1490656026603683940>' };
 }
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
