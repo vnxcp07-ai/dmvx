@@ -14,7 +14,7 @@ function hexToDec(hex) {
 
 async function fetchBuffer(url) {
   try {
-    const res = await axios.get(url, {
+    var res = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 15000,
       headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -27,42 +27,78 @@ async function fetchBuffer(url) {
   }
 }
 
-// Font - load Poppins-Bold.ttf from project root
-let fontName = 'sans-serif';
-let fontLoaded = false;
+// Font loading — tries local paths first, then GitHub raw URL
+var fontName = 'sans-serif';
+var fontLoaded = false;
 
-function ensureFont() {
+async function ensureFont() {
   if (fontLoaded) return;
-  const fontPath = path.join(__dirname, '..', 'Poppins-Bold.ttf');
-  try {
-    const buf = fs.readFileSync(fontPath);
-    GlobalFonts.register(buf, 'DonationFont');
-    fontName = 'DonationFont';
-    fontLoaded = true;
-    console.log('[Font] Loaded from:', fontPath);
-  } catch (e) {
-    console.error('[Font] Failed to load Poppins-Bold.ttf:', e.message);
+
+  // Try local paths
+  var localPaths = [
+    path.join(__dirname, '..', 'Poppins-Bold.ttf'),
+    path.join(__dirname, 'Poppins-Bold.ttf'),
+    '/var/task/Poppins-Bold.ttf',
+  ];
+
+  for (var i = 0; i < localPaths.length; i++) {
+    var p = localPaths[i];
+    try {
+      var buf = fs.readFileSync(p);
+      GlobalFonts.register(buf, 'DonationFont');
+      fontName = 'DonationFont';
+      fontLoaded = true;
+      console.log('[Font] Loaded from local path:', p);
+      return;
+    } catch (e) {
+      console.log('[Font] Not found at:', p);
+    }
   }
+
+  // Fallback: fetch from GitHub raw (font is in the repo)
+  console.log('[Font] Trying GitHub raw URL...');
+  var urls = [
+    'https://raw.githubusercontent.com/vnxcp07-ai/dmvx/main/Poppins-Bold.ttf',
+    'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf',
+  ];
+
+  for (var j = 0; j < urls.length; j++) {
+    var buf2 = await fetchBuffer(urls[j]);
+    if (!buf2) continue;
+    try {
+      GlobalFonts.register(buf2, 'DonationFont');
+      fontName = 'DonationFont';
+      fontLoaded = true;
+      console.log('[Font] Loaded from URL:', urls[j]);
+      return;
+    } catch (e) {
+      console.warn('[Font] Register failed from URL:', e.message);
+    }
+  }
+
+  console.error('[Font] ALL font sources failed — text will not render');
 }
 
-// Robux icon - load from project root, fallback to URL
-let robuxIconCache = null;
+// Robux icon
+var robuxIconCache = null;
 
 async function getRobuxIcon() {
   if (robuxIconCache) return robuxIconCache;
-  const localPath = path.join(__dirname, '..', 'robux.png');
+
+  var localPath = path.join(__dirname, '..', 'robux.png');
   try {
-    const buf = fs.readFileSync(localPath);
+    var buf = fs.readFileSync(localPath);
     robuxIconCache = await loadImage(buf);
     console.log('[Robux] Loaded from local file');
     return robuxIconCache;
   } catch (e) {
-    console.warn('[Robux] Local load failed, trying URL:', e.message);
+    console.warn('[Robux] Local load failed:', e.message);
   }
-  const buf = await fetchBuffer('https://raw.githubusercontent.com/vnxcp07-ai/dmvx/main/robux.png');
-  if (buf) {
+
+  var buf2 = await fetchBuffer('https://raw.githubusercontent.com/vnxcp07-ai/dmvx/main/robux.png');
+  if (buf2) {
     try {
-      robuxIconCache = await loadImage(buf);
+      robuxIconCache = await loadImage(buf2);
       console.log('[Robux] Loaded from URL');
     } catch (e) {
       console.warn('[Robux] URL load failed:', e.message);
@@ -72,8 +108,8 @@ async function getRobuxIcon() {
 }
 
 function tintIcon(img, size, hexColor) {
-  const off = createCanvas(size, size);
-  const ctx = off.getContext('2d');
+  var off = createCanvas(size, size);
+  var ctx = off.getContext('2d');
   ctx.drawImage(img, 0, 0, size, size);
   ctx.globalCompositeOperation = 'source-in';
   ctx.fillStyle = hexColor;
@@ -82,33 +118,35 @@ function tintIcon(img, size, hexColor) {
 }
 
 function drawRobuxWithStroke(ctx, img, cx, cy, iconSize, color, strokeWidth) {
-  const strokeSize = iconSize + strokeWidth * 2;
-  const blackOff = createCanvas(strokeSize, strokeSize);
-  const blackCtx = blackOff.getContext('2d');
+  var strokeSize = iconSize + strokeWidth * 2;
+  var blackOff = createCanvas(strokeSize, strokeSize);
+  var blackCtx = blackOff.getContext('2d');
   blackCtx.drawImage(img, 0, 0, strokeSize, strokeSize);
   blackCtx.globalCompositeOperation = 'source-in';
   blackCtx.fillStyle = 'rgba(0,0,0,0.9)';
   blackCtx.fillRect(0, 0, strokeSize, strokeSize);
 
-  const offsets = [
+  var offsets = [
     [-strokeWidth, -strokeWidth], [0, -strokeWidth], [strokeWidth, -strokeWidth],
     [-strokeWidth, 0],                               [strokeWidth, 0],
     [-strokeWidth,  strokeWidth], [0,  strokeWidth], [strokeWidth,  strokeWidth],
   ];
-  for (const [ox, oy] of offsets) {
+  for (var k = 0; k < offsets.length; k++) {
+    var ox = offsets[k][0];
+    var oy = offsets[k][1];
     ctx.drawImage(blackOff,
       cx - iconSize / 2 + ox - strokeWidth,
       cy - iconSize / 2 + oy - strokeWidth,
       strokeSize, strokeSize
     );
   }
-  const tinted = tintIcon(img, iconSize, color);
+  var tinted = tintIcon(img, iconSize, color);
   ctx.drawImage(tinted, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
 }
 
 function drawStrokedText(ctx, text, x, y, font, fillColor, strokeWidth, align, baseline) {
-  if (!align) align = 'center';
-  if (!baseline) baseline = 'alphabetic';
+  align    = align    || 'center';
+  baseline = baseline || 'alphabetic';
   ctx.save();
   ctx.font         = font;
   ctx.textAlign    = align;
@@ -153,17 +191,17 @@ function drawBackground(ctx, W, H, themeHex, glow) {
 
   if (glow === 'high') {
     var grad = ctx.createRadialGradient(W / 2, H + 30, 20, W / 2, H * 0.65, W * 0.78);
-    grad.addColorStop(0,    'rgba(' + r + ', 0, 0, 1)');
-    grad.addColorStop(0.30, 'rgba(' + Math.floor(r * 0.65) + ', 0, 0, 0.88)');
-    grad.addColorStop(0.60, 'rgba(' + Math.floor(r * 0.35) + ', 0, 0, 0.55)');
-    grad.addColorStop(1,    'rgba(0, 0, 0, 0)');
+    grad.addColorStop(0,    'rgba(' + r + ',0,0,1)');
+    grad.addColorStop(0.30, 'rgba(' + Math.floor(r * 0.65) + ',0,0,0.88)');
+    grad.addColorStop(0.60, 'rgba(' + Math.floor(r * 0.35) + ',0,0,0.55)');
+    grad.addColorStop(1,    'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
   } else if (glow === 'medium') {
     var grad2 = ctx.createRadialGradient(W / 2, H + 10, 0, W / 2, H * 0.85, W * 0.62);
-    grad2.addColorStop(0,   'rgba(' + r + ', ' + Math.floor(g * 0.08) + ', ' + Math.floor(b * 0.28) + ', 0.55)');
-    grad2.addColorStop(0.5, 'rgba(' + Math.floor(r * 0.45) + ', 0, ' + Math.floor(b * 0.1) + ', 0.28)');
-    grad2.addColorStop(1,   'rgba(0, 0, 0, 0)');
+    grad2.addColorStop(0,   'rgba(' + r + ',' + Math.floor(g * 0.08) + ',' + Math.floor(b * 0.28) + ',0.55)');
+    grad2.addColorStop(0.5, 'rgba(' + Math.floor(r * 0.45) + ',0,' + Math.floor(b * 0.1) + ',0.28)');
+    grad2.addColorStop(1,   'rgba(0,0,0,0)');
     ctx.fillStyle = grad2;
     ctx.fillRect(0, 0, W, H);
   }
@@ -192,7 +230,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    var body       = req.body;
+    var body         = req.body;
     var donatorName  = body.donatorName;
     var receiverName = body.receiverName;
     var donatorId    = body.donatorId;
@@ -207,15 +245,14 @@ module.exports = async function handler(req, res) {
     if (!WEBHOOK) return res.status(500).json({ error: 'No webhook URL configured' });
 
     var numAmount = parseInt(typeof amount === 'string' ? amount.replace(/,/g, '') : amount);
+    var tier      = getTier(numAmount);
+    var themeHex  = tier.hex;
+    var emoji     = tier.emoji;
+    var glow      = tier.glow;
 
-    var tier     = getTier(numAmount);
-    var themeHex = tier.hex;
-    var emoji    = tier.emoji;
-    var glow     = tier.glow;
-
-    ensureFont();
+    await ensureFont();
     await getRobuxIcon();
-    console.log('[Font] Using:', fontName);
+    console.log('[Font] Active:', fontName, '| fontLoaded:', fontLoaded);
 
     var donatorAvatarUrl  = await fetchAvatarUrl(donatorId);
     var receiverAvatarUrl = await fetchAvatarUrl(receiverId);
@@ -253,6 +290,8 @@ module.exports = async function handler(req, res) {
 
     ctx.font = amtFont;
     var amtWidth  = ctx.measureText(amtText).width;
+    console.log('[Text] "' + amtText + '" width=' + amtWidth + ' font=' + amtFont);
+
     var groupW    = iconSize + gap + amtWidth;
     var groupLeft = centerX - groupW / 2;
 
@@ -274,6 +313,7 @@ module.exports = async function handler(req, res) {
     );
 
     var nameY = avatarCY + avatarRadius + 26;
+
     function trim(s, max) {
       max = max || 16;
       return s.length > max ? s.slice(0, max) + '..' : s;
