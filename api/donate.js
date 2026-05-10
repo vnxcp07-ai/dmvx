@@ -164,9 +164,9 @@ async function fetchAvatarUrl(userId) {
 
 // ── Tier: only 3 levels ───────────────────────────────────────────────────────
 function getTier(amount) {
-    if (amount >= 10000000) return { hex: '#ff0033', glow: true,  emoji: '<:starfall:1490655938506395829>' };
-    if (amount >= 1000000)  return { hex: '#ff0080', glow: true,  emoji: '<:smitebro:1490655992025841804>' };
-    return                         { hex: '#ff00e1', glow: false, emoji: '<:nukeig:1490656026603683940>' };
+    if (amount >= 10000000) return { hex: '#ff0033', glow: 0.35, emoji: '<:starfall:1490655938506395829>' };
+    if (amount >= 1000000)  return { hex: '#ff0080', glow: 0.15, emoji: '<:smitebro:1490655992025841804>' };
+    return                         { hex: '#ff00e1', glow: 0,    emoji: '<:nukeig:1490656026603683940>' };
 }
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
@@ -234,10 +234,10 @@ module.exports = async function handler(req, res) {
 
         ctx.clearRect(0, 0, W, H);
 
-        if (glow) {
+        if (glow > 0) {
             const glowGrad = ctx.createLinearGradient(0, H, 0, 0);
-            glowGrad.addColorStop(0,   `rgba(${r},${g},${b},0.35)`);
-            glowGrad.addColorStop(0.5, `rgba(${r},${g},${b},0.10)`);
+            glowGrad.addColorStop(0,   `rgba(${r},${g},${b},${glow})`);
+            glowGrad.addColorStop(0.5, `rgba(${r},${g},${b},${(glow * 0.3).toFixed(2)})`);
             glowGrad.addColorStop(1,   `rgba(0,0,0,0)`);
             ctx.fillStyle = glowGrad;
             ctx.fillRect(0, 0, W, H);
