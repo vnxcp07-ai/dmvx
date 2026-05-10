@@ -90,7 +90,7 @@ blackCtx.globalCompositeOperation = 'source-in';
 blackCtx.fillStyle = 'rgba(0,0,0,0.9)';
 blackCtx.fillRect(0, 0, strokeSize, strokeSize);
 
-text
+
 
 const offsets = [
     [-strokeWidth, -strokeWidth], [0, -strokeWidth], [strokeWidth, -strokeWidth],
@@ -134,7 +134,7 @@ ctx.clip();
 ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
 ctx.restore();
 
-text
+
 
 // 2. Ring drawn ON TOP of image
 ctx.save();
@@ -174,7 +174,7 @@ if (req.method !== 'POST') {
 return res.status(405).json({ error: 'Method not allowed' });
 }
 
-text
+
 
 try {
     const {
