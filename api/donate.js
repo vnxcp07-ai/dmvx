@@ -59,34 +59,27 @@ async function fetchRobloxAvatar(userId) {
     }
 }
 
-// ── Font ──────────────────────────────────────────────────────────────────────
+// ── Font — Download from web directly ─────────────────────────────────────────
 let fontName = 'sans-serif';
 let fontReady = false;
 
 async function ensureFont() {
     if (fontReady) return;
-    try {
-        const fontPath = path.join(process.cwd(), 'Montserrat-Bold.ttf');
-        console.log('Loading font from disk:', fontPath);
-        console.log('Font exists:', fs.existsSync(fontPath));
-        const buf = fs.readFileSync(fontPath);
-        GlobalFonts.register(buf, 'Montserrat');
-        fontName = 'Montserrat';
-        fontReady = true;
-        console.log('✅ Font loaded from disk');
-    } catch (e) {
-        console.warn('Font from disk failed:', e.message, '— trying download...');
-        const buf = await fetchBuffer(
-            'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf'
-        );
-        if (buf) {
+    console.log('Downloading font from web...');
+    const buf = await fetchBuffer(
+        'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf'
+    );
+    if (buf) {
+        try {
             GlobalFonts.register(buf, 'Montserrat');
             fontName = 'Montserrat';
             fontReady = true;
-            console.log('✅ Font loaded from download');
-        } else {
-            console.warn('Font download also failed, using sans-serif');
+            console.log('✅ Font loaded from web');
+        } catch (e) {
+            console.warn('Font register failed:', e.message);
         }
+    } else {
+        console.warn('Font download failed, using sans-serif');
     }
 }
 
