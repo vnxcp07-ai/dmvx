@@ -129,7 +129,6 @@ function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
 
 // ── Avatar: image clipped first, ring drawn on top, no glow ──────────────────
 function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
-    // 1. clip and draw image
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -138,7 +137,6 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
     ctx.restore();
 
-    // 2. ring ON TOP - no shadow/glow
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
@@ -163,6 +161,7 @@ async function fetchAvatarUrl(userId) {
 }
 
 // ── Tier: only 3 levels ───────────────────────────────────────────────────────
+// glow: 0 = none, 0.0-1.0 = intensity
 function getTier(amount) {
     if (amount >= 10000000) return { hex: '#ff0033', glow: 0.35, emoji: '<:starfall:1490655938506395829>' };
     if (amount >= 1000000)  return { hex: '#ff0080', glow: 0.15, emoji: '<:smitebro:1490655992025841804>' };
@@ -234,6 +233,7 @@ module.exports = async function handler(req, res) {
 
         ctx.clearRect(0, 0, W, H);
 
+        // glow > 0 = draw gradient, 0 = fully transparent (nuke)
         if (glow > 0) {
             const glowGrad = ctx.createLinearGradient(0, H, 0, 0);
             glowGrad.addColorStop(0,   `rgba(${r},${g},${b},${glow})`);
@@ -270,11 +270,10 @@ module.exports = async function handler(req, res) {
         console.log('[Draw] font:', ctx.font, '| amtText:', amtText, '| amtWidth:', amtWidth);
 
         if (robuxIconCache) {
-        if (robuxIconCache) {
             drawRobuxWithStroke(
                 ctx, robuxIconCache,
                 groupLeft + iconSize / 2, rowY,
-                iconSize, themeHex, 1  
+                iconSize, themeHex, 1  // 1 = thin stroke
             );
         }
 
@@ -291,9 +290,9 @@ module.exports = async function handler(req, res) {
 
         // ── Usernames ─────────────────────────────────────────────────────────
         const trim  = (s, max = 14) => s.length > max ? s.slice(0, max) + '..' : s;
-        const nameY = avatarCY + avatarRadius + 25; // changed from 20 to 28 (moves down)
+        const nameY = avatarCY + avatarRadius + 28; // higher = further down
 
-        ctx.font         = `bold 16px ${fontName}`; // changed from 14 to 16
+        ctx.font         = `bold 16px ${fontName}`; // bigger than before
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'alphabetic';
 
