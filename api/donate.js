@@ -160,14 +160,10 @@ async function fetchAvatarUrl(userId) {
 
 // ── Tier ──────────────────────────────────────────────────────────────────────
 function getTier(amount) {
-    if (amount >= 10000000) return { hex: '#ff0000', emoji: '<:starfall:1490655938506395829>' };
-    if (amount >= 1000000)  return { hex: '#ff0099', emoji: '<:smitebro:1490655992025841804>' };
-    if (amount >= 100000)   return { hex: '#a100ff', emoji: '<:nukeig:1490656026603683940>' };
-    if (amount >= 10000)    return { hex: '#FF0037', emoji: '<:starfall:1490655938506395829>' };
-    if (amount >= 1000)     return { hex: '#FF0062', emoji: '<:smitebro:1490655992025841804>' };
-    return                         { hex: '#ff00bf', emoji: '<:nukeig:1490656026603683940>' };
+    if (amount >= 10000000) return { hex: '#ff0000', emoji: '<:starfall:1490655938506395829>' };  // 10m+
+    if (amount >= 1000000)  return { hex: '#ff0099', emoji: '<:smitebro:1490655992025841804>' };  // 1m+
+    return                         { hex: '#a100ff', emoji: '<:nukeig:1490656026603683940>' };    // 100k+
 }
-
 // ── Main Handler ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
     if (req.method !== 'POST') {
