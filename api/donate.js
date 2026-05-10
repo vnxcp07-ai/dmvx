@@ -39,7 +39,9 @@ module.exports = async function handler(req, res) {
         const tierName = getTier(amount);
         const tier = TIERS[tierName];
 
-        // Call the image generator with all the info
+        // --- FIX: Get the current time for the footer ---
+        const timestamp = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
         const imageBuffer = await generateDonationImage(donatorName, receiverName, donatorId, receiverId, amount);
         
         const form = new FormData();
@@ -49,7 +51,8 @@ module.exports = async function handler(req, res) {
             embeds: [{
                 color: hexToDec(tier.accent), 
                 image: { url: 'attachment://donation.png' },
-                footer: { text: `Donated on • Vxid Utilities` }
+                // --- FIX: Use the new timestamp in the footer ---
+                footer: { text: `Donated on • Today at ${timestamp}` }
             }]
         }));
         
