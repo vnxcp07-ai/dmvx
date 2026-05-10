@@ -4,7 +4,7 @@ const { generateDonationImage } = require('../lib/generateImage.js');
 
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-// FIXED: Tiers now include your Emojis
+// Tiers config with emojis for the message content
 const TIERS = {
   starfall: { accent: '#ff0000', emoji: '<:starfall:1490655938506395829>' },
   smite:    { accent: '#ff0099', emoji: '<:smitebro:1490655992025841804>' },
@@ -33,19 +33,22 @@ module.exports = async function handler(req, res) {
     try {
         const { donatorName, receiverName, donatorId, receiverId, amount } = req.body;
 
-        if (!donatorName || !receiverName || !donatorId || !receiverId || amount == null) {
-            return res.status(400).json({ error: 'Missing required fields in request body.' });
+        if (!donatorName || !receiverName || amount == null) {
+            return res.status(400).json({ error: 'Missing required fields.' });
         }
         
         const tierName = getTier(amount);
         const tier = TIERS[tierName];
 
-        const imageBuffer = await generateDonationImage(donatorName, receiverName, donatorId, receiverId, amount);
+        // Call the new, simple image generator
+        const imageBuffer = await generateDonationImage(amount);
         
         const form = new FormData();
-        // FIXED: The 'content' string now includes the emojis again
+        
         form.append('payload_json', JSON.stringify({
+            // The text content of the message
             content: `${tier.emoji} \`@${donatorName}\` donated <:robux:1451215082640900146> **${Number(amount).toLocaleString()} Robux** to \`@${receiverName}\``,
+            // The embed, which now ONLY contains the image
             embeds: [{
                 color: hexToDec(tier.accent), 
                 image: { url: 'attachment://donation.png' },
@@ -53,8 +56,6 @@ module.exports = async function handler(req, res) {
             }]
         }));
         
-        // Vercel expects 'files[0]' for multiple files, but 'file' is often more reliable for a single file with form-data.
-        // Let's stick to the more common single-file key 'file'. If it fails, we use 'files[0]'
         form.append('file', imageBuffer, {
             filename: 'donation.png',
             contentType: 'image/png',
@@ -64,7 +65,7 @@ module.exports = async function handler(req, res) {
             headers: form.getHeaders()
         });
 
-        res.status(200).json({ success: true, message: 'Donation image sent to Discord.' });
+        res.status(200).json({ success: true });
 
     } catch (error) {
         console.error('Error processing donation:', error.message, error.stack);
