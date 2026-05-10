@@ -14,8 +14,9 @@ async function fetchBuffer(url) {
   try {
     const res = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 10000,
+      timeout: 15000,
       headers: { 'User-Agent': 'Mozilla/5.0' },
+      maxRedirects: 5,
     });
     return Buffer.from(res.data);
   } catch (e) {
@@ -25,30 +26,40 @@ async function fetchBuffer(url) {
 }
 
 // ── Font ──────────────────────────────────────────────────────────────────────
-let fontName = 'sans-serif';
-let fontReady = false;
+// Multiple reliable TTF CDN sources — tries each until one succeeds
+const FONT_URLS = [
+  'https://raw.githubusercontent.com/google/fonts/main/apache/roboto/static/Roboto-Bold.ttf',
+  'https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf',
+  'https://github.com/google/fonts/blob/main/apache/roboto/static/Roboto-Bold.ttf?raw=true',
+  'https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Bold.ttf',
+];
+
+let fontName = null;
+let fontLoading = null;
 
 async function ensureFont() {
-  if (fontReady) return;
-  const urls = [
-    'https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf',
-    'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf',
-  ];
-  for (const url of urls) {
-    const buf = await fetchBuffer(url);
-    if (buf) {
+  if (fontName !== null) return;
+  if (fontLoading) return fontLoading;
+
+  fontLoading = (async () => {
+    for (const url of FONT_URLS) {
+      console.log('[Font] Trying:', url);
+      const buf = await fetchBuffer(url);
+      if (!buf) continue;
       try {
         GlobalFonts.register(buf, 'DonationFont');
         fontName = 'DonationFont';
-        fontReady = true;
-        console.log('[Font] Loaded from:', url);
+        console.log('[Font] Registered OK from:', url);
         return;
       } catch (e) {
         console.warn('[Font] Register failed:', e.message);
       }
     }
-  }
-  console.warn('[Font] Using sans-serif fallback');
+    fontName = 'sans-serif';
+    console.warn('[Font] All URLs failed — using sans-serif');
+  })();
+
+  return fontLoading;
 }
 
 // ── Robux Icon ────────────────────────────────────────────────────────────────
@@ -81,8 +92,8 @@ function tintIcon(img, size, hexColor) {
 
 function drawRobuxWithStroke(ctx, img, cx, cy, iconSize, color, strokeWidth) {
   const strokeSize = iconSize + strokeWidth * 2;
-  const blackOff = createCanvas(strokeSize, strokeSize);
-  const blackCtx = blackOff.getContext('2d');
+  const blackOff   = createCanvas(strokeSize, strokeSize);
+  const blackCtx   = blackOff.getContext('2d');
   blackCtx.drawImage(img, 0, 0, strokeSize, strokeSize);
   blackCtx.globalCompositeOperation = 'source-in';
   blackCtx.fillStyle = 'rgba(0,0,0,0.9)';
@@ -94,8 +105,7 @@ function drawRobuxWithStroke(ctx, img, cx, cy, iconSize, color, strokeWidth) {
     [-strokeWidth,  strokeWidth], [0,  strokeWidth], [strokeWidth,  strokeWidth],
   ];
   for (const [ox, oy] of offsets) {
-    ctx.drawImage(
-      blackOff,
+    ctx.drawImage(blackOff,
       cx - iconSize / 2 + ox - strokeWidth,
       cy - iconSize / 2 + oy - strokeWidth,
       strokeSize, strokeSize
@@ -106,22 +116,24 @@ function drawRobuxWithStroke(ctx, img, cx, cy, iconSize, color, strokeWidth) {
   ctx.drawImage(tinted, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
 }
 
-// ── Text ──────────────────────────────────────────────────────────────────────
-function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
+// ── Text — sets font/align/baseline explicitly every call ─────────────────────
+function drawStrokedText(ctx, text, x, y, font, fillColor, strokeWidth, align = 'center', baseline = 'alphabetic') {
   ctx.save();
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
-  ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-  ctx.lineWidth = strokeWidth;
+  ctx.font         = font;
+  ctx.textAlign    = align;
+  ctx.textBaseline = baseline;
+  ctx.lineJoin     = 'round';
+  ctx.miterLimit   = 2;
+  ctx.strokeStyle  = 'rgba(0,0,0,0.9)';
+  ctx.lineWidth    = strokeWidth;
   ctx.strokeText(text, x, y);
-  ctx.fillStyle = fillColor;
+  ctx.fillStyle    = fillColor;
   ctx.fillText(text, x, y);
   ctx.restore();
 }
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
-  // 1. Clip + draw image
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -130,22 +142,18 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
   ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
   ctx.restore();
 
-  // 2. Glowing ring on top
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius + 5, 0, Math.PI * 2);
   ctx.strokeStyle = borderColor;
-  ctx.lineWidth = 6;
+  ctx.lineWidth   = 6;
   ctx.shadowColor = borderColor;
-  ctx.shadowBlur = 25;
+  ctx.shadowBlur  = 25;
   ctx.stroke();
   ctx.restore();
 }
 
 // ── Background glow ───────────────────────────────────────────────────────────
-// 100k → transparent (glow: 'none')
-// 1mil → subtle pink radial glow from bottom (glow: 'medium')
-// 10mil → strong red radial glow from bottom-center (glow: 'high')
 function drawBackground(ctx, W, H, themeHex, glow) {
   ctx.clearRect(0, 0, W, H);
   if (glow === 'none') return;
@@ -155,7 +163,6 @@ function drawBackground(ctx, W, H, themeHex, glow) {
   const b = parseInt(themeHex.slice(5, 7), 16);
 
   if (glow === 'high') {
-    // Deep red spotlight rising from bottom-center — matches 10m+ image
     const grad = ctx.createRadialGradient(W / 2, H + 30, 20, W / 2, H * 0.65, W * 0.78);
     grad.addColorStop(0,    `rgba(${r}, 0, 0, 1)`);
     grad.addColorStop(0.30, `rgba(${Math.floor(r * 0.65)}, 0, 0, 0.88)`);
@@ -164,7 +171,6 @@ function drawBackground(ctx, W, H, themeHex, glow) {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
   } else if (glow === 'medium') {
-    // Subtle pink blush from bottom — matches 1m+ image
     const grad = ctx.createRadialGradient(W / 2, H + 10, 0, W / 2, H * 0.85, W * 0.62);
     grad.addColorStop(0,   `rgba(${r}, ${Math.floor(g * 0.08)}, ${Math.floor(b * 0.28)}, 0.55)`);
     grad.addColorStop(0.5, `rgba(${Math.floor(r * 0.45)}, 0, ${Math.floor(b * 0.1)}, 0.28)`);
@@ -174,7 +180,7 @@ function drawBackground(ctx, W, H, themeHex, glow) {
   }
 }
 
-// ── Fetch Roblox avatar URL ───────────────────────────────────────────────────
+// ── Roblox avatar ─────────────────────────────────────────────────────────────
 async function fetchAvatarUrl(userId) {
   try {
     const res = await axios.get(
@@ -217,18 +223,15 @@ module.exports = async function handler(req, res) {
 
     const { hex: themeHex, emoji, glow } = getTier(numAmount);
 
-    // Load font + robux icon in parallel
+    // Load font + robux icon in parallel, then fetch avatars
     await Promise.all([ensureFont(), getRobuxIcon()]);
+    console.log('[Font] Active font:', fontName);
 
-    // Fetch avatar URLs
     const [donatorAvatarUrl, receiverAvatarUrl] = await Promise.all([
       fetchAvatarUrl(donatorId),
       fetchAvatarUrl(receiverId),
     ]);
 
-    console.log('[Avatar URLs]', donatorAvatarUrl, receiverAvatarUrl);
-
-    // Fetch avatar image buffers
     const [dBuf, rBuf] = await Promise.all([
       donatorAvatarUrl  ? fetchBuffer(donatorAvatarUrl)  : Promise.resolve(null),
       receiverAvatarUrl ? fetchBuffer(receiverAvatarUrl) : Promise.resolve(null),
@@ -240,67 +243,74 @@ module.exports = async function handler(req, res) {
 
     const [dImg, rImg] = await Promise.all([loadImage(dBuf), loadImage(rBuf)]);
 
-    // ── Canvas — wide banner format ───────────────────────────────────────
+    // ── Canvas ────────────────────────────────────────────────────────────────
     const W = 1000, H = 260;
     const canvas = createCanvas(W, H);
     const ctx    = canvas.getContext('2d');
 
-    // Background (transparent base + optional radial glow)
     drawBackground(ctx, W, H, themeHex, glow);
 
-    // ── Layout constants ──────────────────────────────────────────────────
+    // ── Layout constants ──────────────────────────────────────────────────────
     const avatarRadius = 80;
-    const avatarCY     = H / 2 - 16;   // avatar vertical center (slightly above mid)
-    const leftCX       = 130;           // left avatar x
-    const rightCX      = W - 130;       // right avatar x
+    const avatarCY     = H / 2 - 16;
+    const leftCX       = 130;
+    const rightCX      = W - 130;
     const centerX      = W / 2;
 
-    // Draw avatars with glowing ring
     drawAvatar(ctx, dImg, leftCX,  avatarCY, avatarRadius, themeHex);
     drawAvatar(ctx, rImg, rightCX, avatarCY, avatarRadius, themeHex);
 
-    // ── Center: [ Robux icon ][ amount ] ─────────────────────────────────
-    const iconSize   = 56;
-    const amtText    = formatNumber(numAmount);
-    const amtFontSz  = 68;
-    const gap        = 14;
+    // ── Center row: [Robux icon] [amount text] ────────────────────────────────
+    const iconSize = 56;
+    const amtText  = formatNumber(numAmount);
+    const amtFont  = `bold 68px ${fontName}`;
+    const gap      = 14;
+    const amtRowY  = H / 2 - 20;
 
-    ctx.font         = `bold ${amtFontSz}px ${fontName}`;
-    ctx.textBaseline = 'middle';
-    const amtWidth   = ctx.measureText(amtText).width;
+    // Measure to center the icon+text group
+    ctx.font = amtFont;
+    const amtWidth  = ctx.measureText(amtText).width;
+    console.log('[Text] "' + amtText + '" width=' + amtWidth + ' font=' + amtFont);
 
-    const groupW     = iconSize + gap + amtWidth;
-    const groupLeft  = centerX - groupW / 2;
-    const amtRowY    = H / 2 - 20;    // vertical center of amount row
+    const groupW    = iconSize + gap + amtWidth;
+    const groupLeft = centerX - groupW / 2;
 
     if (robuxIconCache) {
-      drawRobuxWithStroke(
-        ctx, robuxIconCache,
+      drawRobuxWithStroke(ctx, robuxIconCache,
         groupLeft + iconSize / 2, amtRowY,
         iconSize, themeHex, 3
       );
     }
 
-    ctx.textAlign = 'left';
-    drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, amtRowY, themeHex, 6);
+    drawStrokedText(ctx, amtText,
+      groupLeft + iconSize + gap, amtRowY,
+      amtFont, themeHex, 6,
+      'left', 'middle'
+    );
 
-    // ── "donated to" below amount ─────────────────────────────────────────
-    ctx.font         = `bold 30px ${fontName}`;
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'alphabetic';
-    drawStrokedText(ctx, 'donated to', centerX, H / 2 + 42, '#FFFFFF', 5);
+    // ── "donated to" ──────────────────────────────────────────────────────────
+    drawStrokedText(ctx, 'donated to',
+      centerX, H / 2 + 42,
+      `bold 30px ${fontName}`, '#FFFFFF', 5,
+      'center', 'alphabetic'
+    );
 
-    // ── Usernames below each avatar ───────────────────────────────────────
-    const nameY  = avatarCY + avatarRadius + 26;
-    const trim   = (s, max = 16) => s.length > max ? s.slice(0, max) + '..' : s;
+    // ── Usernames ─────────────────────────────────────────────────────────────
+    const nameY = avatarCY + avatarRadius + 26;
+    const trim  = (s, max = 16) => s.length > max ? s.slice(0, max) + '..' : s;
 
-    ctx.font      = `bold 16px ${fontName}`;
-    ctx.textAlign = 'center';
+    drawStrokedText(ctx, '@' + trim(donatorName  || 'Unknown'),
+      leftCX, nameY,
+      `bold 16px ${fontName}`, '#FFFFFF', 4,
+      'center', 'alphabetic'
+    );
+    drawStrokedText(ctx, '@' + trim(receiverName || 'Unknown'),
+      rightCX, nameY,
+      `bold 16px ${fontName}`, '#FFFFFF', 4,
+      'center', 'alphabetic'
+    );
 
-    drawStrokedText(ctx, '@' + trim(donatorName  || 'Unknown'), leftCX,  nameY, '#FFFFFF', 4);
-    drawStrokedText(ctx, '@' + trim(receiverName || 'Unknown'), rightCX, nameY, '#FFFFFF', 4);
-
-    // ── Send to Discord ───────────────────────────────────────────────────
+    // ── Discord webhook ───────────────────────────────────────────────────────
     const imgBuf = canvas.toBuffer('image/png');
     const form   = new FormData();
 
