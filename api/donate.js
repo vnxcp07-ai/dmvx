@@ -4,7 +4,6 @@ const { generateDonationImage } = require('../lib/generateImage.js');
 
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-// Tiers config with emojis for the message content
 const TIERS = {
   starfall: { accent: '#ff0000', emoji: '<:starfall:1490655938506395829>' },
   smite:    { accent: '#ff0099', emoji: '<:smitebro:1490655992025841804>' },
@@ -33,22 +32,20 @@ module.exports = async function handler(req, res) {
     try {
         const { donatorName, receiverName, donatorId, receiverId, amount } = req.body;
 
-        if (!donatorName || !receiverName || amount == null) {
+        if (!donatorName || !receiverName || !donatorId || !receiverId || amount == null) {
             return res.status(400).json({ error: 'Missing required fields.' });
         }
         
         const tierName = getTier(amount);
         const tier = TIERS[tierName];
 
-        // Call the new, simple image generator
-        const imageBuffer = await generateDonationImage(amount);
+        // Call the image generator with all the info
+        const imageBuffer = await generateDonationImage(donatorName, receiverName, donatorId, receiverId, amount);
         
         const form = new FormData();
         
         form.append('payload_json', JSON.stringify({
-            // The text content of the message
             content: `${tier.emoji} \`@${donatorName}\` donated <:robux:1451215082640900146> **${Number(amount).toLocaleString()} Robux** to \`@${receiverName}\``,
-            // The embed, which now ONLY contains the image
             embeds: [{
                 color: hexToDec(tier.accent), 
                 image: { url: 'attachment://donation.png' },
