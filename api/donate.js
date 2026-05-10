@@ -270,10 +270,11 @@ module.exports = async function handler(req, res) {
         console.log('[Draw] font:', ctx.font, '| amtText:', amtText, '| amtWidth:', amtWidth);
 
         if (robuxIconCache) {
+        if (robuxIconCache) {
             drawRobuxWithStroke(
                 ctx, robuxIconCache,
                 groupLeft + iconSize / 2, rowY,
-                iconSize, themeHex, 2
+                iconSize, themeHex, 1  
             );
         }
 
@@ -290,9 +291,9 @@ module.exports = async function handler(req, res) {
 
         // ── Usernames ─────────────────────────────────────────────────────────
         const trim  = (s, max = 14) => s.length > max ? s.slice(0, max) + '..' : s;
-        const nameY = avatarCY + avatarRadius + 20;
+        const nameY = avatarCY + avatarRadius + 25; // changed from 20 to 28 (moves down)
 
-        ctx.font         = `bold 14px ${fontName}`;
+        ctx.font         = `bold 16px ${fontName}`; // changed from 14 to 16
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'alphabetic';
 
