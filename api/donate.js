@@ -158,9 +158,9 @@ async function fetchAvatarUrl(userId) {
 
 // ── Tier: only 3 levels ───────────────────────────────────────────────────────
 function getTier(amount) {
-    if (amount >= 10000000) return { hex: '#ff0033', emoji: '<:starfall:1490655938506395829>' };
-    if (amount >= 1000000)  return { hex: '#ff0080', emoji: '<:smitebro:1490655992025841804>' };
-    return                         { hex: '#ff00e1', emoji: '<:nukeig:1490656026603683940>' };
+    if (amount >= 10000000) return { hex: '#ff0033', glow: true,  emoji: '<:starfall:1490655938506395829>' };
+    if (amount >= 1000000)  return { hex: '#ff0080', glow: true,  emoji: '<:smitebro:1490655992025841804>' };
+    return                         { hex: '#ff00e1', glow: false, emoji: '<:nukeig:1490656026603683940>' };
 }
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
@@ -191,7 +191,8 @@ module.exports = async function handler(req, res) {
             return res.status(200).json({ skipped: true, reason: 'Below 100k threshold' });
         }
 
-        const { hex: themeHex, emoji } = getTier(numAmount);
+        const tier = getTier(numAmount);
+        const { hex: themeHex, glow, emoji } = tier;
         const r = parseInt(themeHex.slice(1, 3), 16);
         const g = parseInt(themeHex.slice(3, 5), 16);
         const b = parseInt(themeHex.slice(5, 7), 16);
@@ -226,14 +227,17 @@ module.exports = async function handler(req, res) {
         const canvas = createCanvas(W, H);
         const ctx    = canvas.getContext('2d');
 
-        // transparent bg + bottom glow
+        // transparent bg + bottom glow only for smite/starfall
         ctx.clearRect(0, 0, W, H);
-        const glow = ctx.createLinearGradient(0, H, 0, 0);
-        glow.addColorStop(0,   `rgba(${r},${g},${b},0.35)`);
-        glow.addColorStop(0.5, `rgba(${r},${g},${b},0.10)`);
-        glow.addColorStop(1,   `rgba(0,0,0,0)`);
-        ctx.fillStyle = glow;
-        ctx.fillRect(0, 0, W, H);
+
+        if (glow) {
+            const glowGrad = ctx.createLinearGradient(0, H, 0, 0);
+            glowGrad.addColorStop(0,   `rgba(${r},${g},${b},0.35)`);
+            glowGrad.addColorStop(0.5, `rgba(${r},${g},${b},0.10)`);
+            glowGrad.addColorStop(1,   `rgba(0,0,0,0)`);
+            ctx.fillStyle = glowGrad;
+            ctx.fillRect(0, 0, W, H);
+        }
 
         // ── Layout ────────────────────────────────────────────────────────────
         const avatarRadius = 55;
@@ -251,7 +255,6 @@ module.exports = async function handler(req, res) {
         const gap      = 10;
         const rowY     = H / 2 - 18;
 
-        // MUST set font before measuring
         ctx.font         = `bold 44px ${fontName}`;
         ctx.textBaseline = 'middle';
         ctx.textAlign    = 'left';
@@ -260,7 +263,6 @@ module.exports = async function handler(req, res) {
         const groupW    = iconSize + gap + amtWidth;
         const groupLeft = centerX - groupW / 2;
 
-        // Robux icon
         if (robuxIconCache) {
             drawRobuxWithStroke(
                 ctx, robuxIconCache,
@@ -269,7 +271,6 @@ module.exports = async function handler(req, res) {
             );
         }
 
-        // Amount number - font/align/baseline already set
         drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, rowY, themeHex, 4);
 
         // "donated to"
