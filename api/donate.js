@@ -25,22 +25,31 @@ async function fetchBuffer(url) {
 }
 
 // ── Font ──────────────────────────────────────────────────────────────────────
-let fontName  = 'sans-serif';
-let fontReady = false;
+let fontName   = 'sans-serif';
+let fontBuffer = null; // cache the buffer, re-register every cold start
 
 async function ensureFont() {
-    if (fontReady) return;
+    // If we already have the buffer loaded into GlobalFonts, skip
+    if (fontBuffer) {
+        try {
+            GlobalFonts.register(fontBuffer, 'DonationFont');
+        } catch (e) { /* already registered */ }
+        fontName = 'DonationFont';
+        return;
+    }
+
     const urls = [
         'https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf',
         'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf',
     ];
+
     for (const url of urls) {
         const buf = await fetchBuffer(url);
         if (buf) {
             try {
                 GlobalFonts.register(buf, 'DonationFont');
-                fontName  = 'DonationFont';
-                fontReady = true;
+                fontBuffer = buf;
+                fontName   = 'DonationFont';
                 console.log('[Font] Loaded OK from:', url);
                 return;
             } catch (e) {
@@ -121,7 +130,6 @@ function drawStrokedText(ctx, text, x, y, fillColor, strokeWidth) {
 
 // ── Avatar: image clipped first, ring drawn on top ───────────────────────────
 function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
-    // 1. clip and draw image
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -130,7 +138,6 @@ function drawAvatar(ctx, img, cx, cy, radius, borderColor) {
     ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
     ctx.restore();
 
-    // 2. ring ON TOP
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
@@ -197,7 +204,7 @@ module.exports = async function handler(req, res) {
         const g = parseInt(themeHex.slice(3, 5), 16);
         const b = parseInt(themeHex.slice(5, 7), 16);
 
-        // load font + icon + avatar urls in parallel
+        // load everything in parallel
         const [, , donatorAvatarUrl, receiverAvatarUrl] = await Promise.all([
             ensureFont(),
             getRobuxIcon(),
@@ -227,7 +234,6 @@ module.exports = async function handler(req, res) {
         const canvas = createCanvas(W, H);
         const ctx    = canvas.getContext('2d');
 
-        // transparent bg + bottom glow only for smite/starfall
         ctx.clearRect(0, 0, W, H);
 
         if (glow) {
@@ -249,12 +255,13 @@ module.exports = async function handler(req, res) {
         drawAvatar(ctx, dImg, leftCX,  avatarCY, avatarRadius, themeHex);
         drawAvatar(ctx, rImg, rightCX, avatarCY, avatarRadius, themeHex);
 
-        // ── Amount row: icon + number ─────────────────────────────────────────
+        // ── Amount row ────────────────────────────────────────────────────────
         const iconSize = 38;
         const amtText  = formatNumber(numAmount);
         const gap      = 10;
         const rowY     = H / 2 - 18;
 
+        // Set font BEFORE measuring - use explicit px, no quotes around font name
         ctx.font         = `bold 44px ${fontName}`;
         ctx.textBaseline = 'middle';
         ctx.textAlign    = 'left';
@@ -262,6 +269,8 @@ module.exports = async function handler(req, res) {
         const amtWidth  = ctx.measureText(amtText).width;
         const groupW    = iconSize + gap + amtWidth;
         const groupLeft = centerX - groupW / 2;
+
+        console.log('[Draw] font:', ctx.font, '| amtText:', amtText, '| amtWidth:', amtWidth);
 
         if (robuxIconCache) {
             drawRobuxWithStroke(
@@ -271,6 +280,10 @@ module.exports = async function handler(req, res) {
             );
         }
 
+        // Draw amount - MUST set font again after drawRobuxWithStroke since it uses save/restore
+        ctx.font         = `bold 44px ${fontName}`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign    = 'left';
         drawStrokedText(ctx, amtText, groupLeft + iconSize + gap, rowY, themeHex, 4);
 
         // "donated to"
